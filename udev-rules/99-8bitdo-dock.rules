@@ -1,0 +1,1 @@
+ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="2dc8", ATTR{idProduct}=="6013", RUN+="/usr/local/bin/8bitdo-udev-handler"

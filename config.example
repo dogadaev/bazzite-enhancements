@@ -1,0 +1,19 @@
+# Bazzite Enhancements Configuration
+# Copy this to /etc/bazzite-enhancements.conf on your Bazzite machine
+
+# 1. System User (the user who runs Steam/ADB)
+SYSTEM_USER="dogad"
+
+# 2. TV Configuration (Philips Android TV)
+TV_IP="192.168.188.65"
+TV_MACS="28:AD:18:C4:44:D6 28:ad:18:c4:44:d5"
+TV_HDMI_URI="content://android.media.tv/passthrough/com.mediatek.tvinput%2F.hdmi.HDMIInputService%2FHW7"
+
+# 3. Hardware PCI Addresses (for GPU unbind/bind)
+GPU_PCI_ADDR="0000:09:00.0"
+AUDIO_PCI_ADDR="0000:09:00.1"
+
+# 4. Wakeup Trigger Devices (ACPI names)
+# These are typical for B550/X570 boards but may vary
+WAKEUP_DEVICES="PTXH GP12 GPP0 GPP8 SWUS SWDS PT24 PT28 PT29"
+CONTROLLER_WAKEUP_DEVICES="XHC0 GP13"

@@ -1,0 +1,16 @@
+[Unit]
+Description=Philips TV Power Hook
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=REPLACE_WITH_USER
+RemainAfterExit=yes
+ExecStart=/usr/bin/python3 /home/REPLACE_WITH_USER/.local/bin/tv-power on
+ExecStop=/usr/bin/python3 /home/REPLACE_WITH_USER/.local/bin/tv-power off
+TimeoutStartSec=180
+TimeoutStopSec=60
+
+[Install]
+WantedBy=multi-user.target

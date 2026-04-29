@@ -1,0 +1,11 @@
+[Unit]
+Description=Surgical Wakeup Trigger Control
+After=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/apply-wakeup-fixes.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

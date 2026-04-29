@@ -1,0 +1,14 @@
+[Unit]
+Description=Fast Steam Machine Sleep Handler
+Before=sleep.target
+StopWhenUnneeded=yes
+
+[Service]
+KillMode=none
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/sleep-handler pre
+ExecStop=/usr/local/bin/sleep-handler post
+
+[Install]
+WantedBy=sleep.target
