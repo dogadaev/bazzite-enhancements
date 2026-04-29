@@ -20,18 +20,42 @@ if os.path.exists(CONFIG_PATH):
 # Default values if config is missing
 HOST = config.get("TV_IP", "192.168.1.100")
 MACS = config.get("TV_MACS", "").split()
-SYSTEM_USER = config.get("SYSTEM_USER", os.getlogin())
+
+# Get SYSTEM_USER safely
+SYSTEM_USER = config.get("SYSTEM_USER")
+if not SYSTEM_USER:
+    try:
+        SYSTEM_USER = os.getlogin()
+    except Exception:
+        SYSTEM_USER = os.environ.get("USER") or os.environ.get("LOGNAME") or "dogad"
+
 HDMI3_URI = config.get("TV_HDMI_URI", "content://android.media.tv/passthrough/com.mediatek.tvinput%2F.hdmi.HDMIInputService%2FHW7")
 
 LOG_FILE = "/tmp/tv-power.log"
 
 def log(msg):
-    with open(LOG_FILE, "a") as f:
-        f.write(f"{time.ctime()}: {msg}\n")
+    print(msg)
+    try:
+        with open(LOG_FILE, "a") as f:
+            f.write(f"{time.ctime()}: {msg}\n")
+    except Exception:
+        pass
 
-ADB = os.path.expanduser(f"/home/{SYSTEM_USER}/.local/bin/adb")
-if not os.path.exists(ADB):
-    ADB = shutil.which("adb") or ADB
+# Use a more robust way to find ADB in user home or system
+def find_adb():
+    # Try common Bazzite/Fedora Silverblue home paths
+    home_paths = [
+        os.path.expanduser(f"~{SYSTEM_USER}"),
+        f"/home/{SYSTEM_USER}",
+        f"/var/home/{SYSTEM_USER}"
+    ]
+    for home in home_paths:
+        adb_path = os.path.join(home, ".local/bin/adb")
+        if os.path.exists(adb_path):
+            return adb_path
+    return shutil.which("adb") or os.path.expanduser("~/.local/bin/adb")
+
+ADB = find_adb()
 
 def get_adb_target():
     try:
@@ -70,18 +94,30 @@ def connect_adb(timeout_s=90):
     return False
 
 def turn_off():
+    log(f"Turning off TV (Target: {ADB_TARGET})")
     if connect_adb(timeout_s=10):
         run_adb("shell input keyevent KEYCODE_SLEEP")
+        log("Sent KEYCODE_SLEEP")
+    else:
+        log("Failed to connect to ADB for turn_off")
     return 0
 
 def turn_on():
-    if not connect_adb(): return 1
+    log(f"Turning on TV (Target: {ADB_TARGET})")
+    if not connect_adb(): 
+        log("Failed to connect to ADB for turn_on")
+        return 1
+    
     run_adb("shell input keyevent KEYCODE_WAKEUP")
+    log("Sent KEYCODE_WAKEUP")
     time.sleep(2)
     if "Awake" not in adb_output("shell", "dumpsys", "power"):
         run_adb("shell input keyevent KEYCODE_POWER")
+        log("Sent KEYCODE_POWER (fallback)")
+    
     time.sleep(2)
     run_adb(f"shell am start -W -n org.droidtv.playtv/.PlayTvActivity -a android.intent.action.VIEW -d {HDMI3_URI}")
+    log("Sent PlayTvActivity start command")
     return 0
 
 if __name__ == "__main__":
