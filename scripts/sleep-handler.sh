@@ -10,7 +10,7 @@ if [ "$1" = "pre" ]; then
 elif [ "$1" = "post" ]; then
     echo "$GPU_PCI" > /sys/bus/pci/drivers/amdgpu/bind
     (
-        sleep 8
+        sleep 1
         # Refresh ADB and turn on TV
         /usr/sbin/runuser -l "$USER_NAME" -c 'adb kill-server; /usr/bin/python3 ~/.local/bin/tv-power on'
     ) &
