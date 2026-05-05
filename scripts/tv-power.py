@@ -119,6 +119,17 @@ def connect_adb(timeout_s=90):
         time.sleep(2)
     return False
 
+def is_on_correct_input():
+    # Convert URI to Input ID for dumpsys tv_input check
+    try:
+        target_id = HDMI3_URI.split("/")[-1].replace("%2F", "/")
+        output = adb_output("shell", "dumpsys", "tv_input")
+        # We look for the inputId in the sessionStateMap
+        return f"inputId: {target_id}" in output
+    except Exception as e:
+        log(f"Error checking input state: {e}")
+    return False
+
 def turn_off():
     log(f"Turning off TV (Target: {ADB_TARGET})")
     if connect_adb(timeout_s=10):
@@ -152,15 +163,17 @@ def turn_on():
         log("Sent KEYCODE_POWER (fallback)")
         time.sleep(5)
     
-    # 4. Switch to HDMI and hold it
-    # We switch twice with a delay to ensure it 'sticks' even if CEC tries to fight it
-    def switch_input():
-        log(f"Switching to HDMI input: {HDMI3_URI}")
-        run_adb(f"shell am start -W -n org.droidtv.playtv/.PlayTvActivity -a android.intent.action.VIEW -d {HDMI3_URI}")
+    # 4. Switch to HDMI if needed, and re-check after a delay
+    def switch_if_needed(label):
+        if not is_on_correct_input():
+            log(f"Switching to HDMI input ({label}): {HDMI3_URI}")
+            run_adb(f"shell am start -W -n org.droidtv.playtv/.PlayTvActivity -a android.intent.action.VIEW -d {HDMI3_URI}")
+        else:
+            log(f"Already on correct HDMI input ({label})")
 
-    switch_input()
-    time.sleep(10) # Wait for TV to fully settle
-    switch_input() # Re-send to ensure we stay on HDMI3
+    switch_if_needed("Initial")
+    time.sleep(10) # Wait for TV to fully settle/CEC to fight
+    switch_if_needed("Verification")
     
     log("Wake sequence completed")
     return 0
