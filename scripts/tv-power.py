@@ -34,12 +34,28 @@ HDMI3_URI = config.get("TV_HDMI_URI", "content://android.media.tv/passthrough/co
 LOG_FILE = "/tmp/tv-power.log"
 
 def log(msg):
-    print(msg)
+    # Print to stdout/journal
+    print(msg, flush=True)
     try:
         with open(LOG_FILE, "a") as f:
             f.write(f"{time.ctime()}: {msg}\n")
     except Exception:
         pass
+
+def send_wol(macs):
+    if not macs:
+        return
+    log(f"Sending WOL packets to {macs}")
+    for mac in macs:
+        try:
+            mac_clean = mac.replace(":", "").replace("-", "")
+            data = bytes.fromhex("ff" * 6 + mac_clean * 16)
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+                s.sendto(data, ("<broadcast>", 9))
+                s.sendto(data, ("255.255.255.255", 9))
+        except Exception as e:
+            log(f"WOL error for {mac}: {e}")
 
 # Use a more robust way to find ADB in user home or system
 def find_adb():
@@ -85,12 +101,22 @@ def adb_output(*args):
 def connect_adb(timeout_s=90):
     if ":" not in ADB_TARGET:
         return True 
+    
+    # First, try to see if it's already connected
+    if "device" in adb_output("get-state"):
+        return True
+
+    log(f"Attempting to connect to {ADB_TARGET} (Timeout: {timeout_s}s)")
     deadline = time.time() + timeout_s
     while time.time() < deadline:
-        if os.system(f"timeout 2 {ADB} connect {ADB_TARGET} > /dev/null 2>&1") == 0:
-            if "device" in adb_output("get-state"):
-                return True
-        time.sleep(1)
+        # Try connecting
+        os.system(f"timeout 3 {ADB} connect {ADB_TARGET} > /dev/null 2>&1")
+        # Check state
+        state = adb_output("get-state")
+        if "device" in state:
+            log(f"Connected to {ADB_TARGET}")
+            return True
+        time.sleep(2)
     return False
 
 def turn_off():
@@ -103,21 +129,40 @@ def turn_off():
     return 0
 
 def turn_on():
-    log(f"Turning on TV (Target: {ADB_TARGET})")
-    if not connect_adb(): 
-        log("Failed to connect to ADB for turn_on")
+    log(f"Initiating TV Wake Sequence (Target: {ADB_TARGET})")
+    
+    # 1. Send WOL to wake the NIC
+    send_wol(MACS)
+    
+    # 2. Wait for ADB connection
+    if not connect_adb(timeout_s=60): 
+        log("Failed to connect to ADB for turn_on after 60s")
         return 1
     
+    # 3. Wake up the screen
     run_adb("shell input keyevent KEYCODE_WAKEUP")
     log("Sent KEYCODE_WAKEUP")
-    time.sleep(2)
+    
+    # Give the TV a moment to process the wake
+    time.sleep(5)
+    
+    # Fallback power toggle if still not awake
     if "Awake" not in adb_output("shell", "dumpsys", "power"):
         run_adb("shell input keyevent KEYCODE_POWER")
         log("Sent KEYCODE_POWER (fallback)")
+        time.sleep(5)
     
-    time.sleep(2)
-    run_adb(f"shell am start -W -n org.droidtv.playtv/.PlayTvActivity -a android.intent.action.VIEW -d {HDMI3_URI}")
-    log("Sent PlayTvActivity start command")
+    # 4. Switch to HDMI and hold it
+    # We switch twice with a delay to ensure it 'sticks' even if CEC tries to fight it
+    def switch_input():
+        log(f"Switching to HDMI input: {HDMI3_URI}")
+        run_adb(f"shell am start -W -n org.droidtv.playtv/.PlayTvActivity -a android.intent.action.VIEW -d {HDMI3_URI}")
+
+    switch_input()
+    time.sleep(10) # Wait for TV to fully settle
+    switch_input() # Re-send to ensure we stay on HDMI3
+    
+    log("Wake sequence completed")
     return 0
 
 if __name__ == "__main__":
